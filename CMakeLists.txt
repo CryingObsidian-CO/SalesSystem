@@ -26,7 +26,10 @@ find_package(Qt6 COMPONENTS
 add_executable(SalesSystem_ main.cpp
         sale.cpp
         sqlite/database.cpp
-        )
+        sale/salesManager.cpp
+        sale/saleStruct.h
+        sale/stockManager.cpp
+)
 target_link_libraries(SalesSystem_
         Qt::Core
         Qt::Gui
