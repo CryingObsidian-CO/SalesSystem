@@ -74,8 +74,18 @@ bool init_db()
 
 int getIdFromName(const std::string& name)
 {
+    int id = -1;
     const std::string sql = "SELECT id FROM products WHERE name = '" + name + "';";
-    if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
+    if (sqlite3_exec(db, sql.c_str(),
+                     [](void* data, int argc, char** argv, char** col_name) -> int
+                     {
+                         int* id_ptr = static_cast<int*>(data);
+                         for (int i = 0; i < argc; i++)
+                         {
+                             *id_ptr = std::stoi(argv[i]);
+                         }
+                         return 0;
+                     }, &id, &err_msg) != SQLITE_OK)
     {
         fprintf(stderr, "查询商品ID失败: %s\n", err_msg);
         sqlite3_free(err_msg);
@@ -99,23 +109,36 @@ bool add_product(const std::string& name, const double price, const int stock)
     return true;
 }
 
-bool query_product(const int id)
+Product query_product(const int id)
 {
+    Product product = {-1, "", 0.0f, 0};
     const std::string sql = "SELECT * FROM products WHERE id = " + std::to_string(id) + ";";
-    if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
+    if (sqlite3_exec(db, sql.c_str(),
+                     [](void* data, int argc, char** argv, char** col_name) -> int
+                     {
+                         auto* product_ptr = static_cast<Product*>(data);
+                         for (int i = 0; i < argc; i++)
+                         {
+                             product_ptr->id = std::stoi(argv[0]);
+                             product_ptr->name = argv[1];
+                             product_ptr->price = std::stof(argv[2]);
+                             product_ptr->stock = std::stoi(argv[3]);
+                         }
+                         return 0;
+                     }, &product, &err_msg) != SQLITE_OK)
     {
         fprintf(stderr, "查询商品失败: %s\n", err_msg);
         sqlite3_free(err_msg);
-        return false;
+        return product;
     }
 
     printf("商品查询完成\n");
-    return true;
+    return product;
 }
 
-int query_products(const std::string& name)
+Product query_products(const std::string& name)
 {
-    query_product(getIdFromName(name));
+    return query_product(getIdFromName(name));
 }
 
 bool update_stock(const int id, const int new_stock)
