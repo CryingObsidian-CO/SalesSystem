@@ -1,10 +1,8 @@
-#ifndef SALESTRUCT_H
-#define SALESTRUCT_H
+#ifndef SALE_STRUCT_H
+#define SALE_STRUCT_H
 
-#include <iostream>
 #include <vector>
 #include <string>
-#include <ctime>
 
 
 
@@ -40,4 +38,7 @@ typedef struct {
     float change;           // 找零金额
 } Transaction;
 
-#endif // SALESTRUCT_H
+auto findProductFromId(std::vector<CartItem>& items, int id) -> decltype(items.begin());
+float get_price_from_id(int id);
+
+#endif // SALE_STRUCT_H
