@@ -1,13 +1,18 @@
-#include "addproductdialog.h"
+#include "editproductdialog.h"
 #include <QMessageBox>
 
-AddProductDialog::AddProductDialog(QWidget* parent)
-    : QDialog(parent)
+EditProductDialog::EditProductDialog(QWidget* parent)
+    : QDialog(parent), m_productId(0), m_productAlertThreshold(10)
 {
     // 设置对话框标题
-    setWindowTitle("添加商品");
+    setWindowTitle("修改商品");
 
     // 创建UI组件
+    auto* productIdLabel = new QLabel("商品ID:");
+    m_productIdEdit = new QLineEdit();
+    m_productIdEdit->setEnabled(false); // ID不可编辑
+    m_productIdEdit->setPlaceholderText("商品ID");
+    
     auto* productNameLabel = new QLabel("商品名称:");
     m_productNameEdit = new QLineEdit();
     m_productNameEdit->setPlaceholderText("请输入商品名称");
@@ -31,11 +36,15 @@ AddProductDialog::AddProductDialog(QWidget* parent)
     m_productAlertThresholdEdit->setPlaceholderText("请输入预警阈值，库存低于此值时会报警");
     m_productAlertThresholdEdit->setText("10"); // 默认阈值为10
 
-    m_okButton = new QPushButton("确认");
+    m_okButton = new QPushButton("确认修改");
     m_cancelButton = new QPushButton("取消");
 
     // 创建布局
     auto* mainLayout = new QVBoxLayout(this);
+
+    auto* idLayout = new QHBoxLayout();
+    idLayout->addWidget(productIdLabel);
+    idLayout->addWidget(m_productIdEdit);
 
     auto* nameLayout = new QHBoxLayout();
     nameLayout->addWidget(productNameLabel);
@@ -58,6 +67,7 @@ AddProductDialog::AddProductDialog(QWidget* parent)
     buttonLayout->addWidget(m_okButton);
     buttonLayout->addWidget(m_cancelButton);
 
+    mainLayout->addLayout(idLayout);
     mainLayout->addLayout(nameLayout);
     mainLayout->addLayout(priceLayout);
     mainLayout->addLayout(stockLayout);
@@ -65,39 +75,60 @@ AddProductDialog::AddProductDialog(QWidget* parent)
     mainLayout->addLayout(buttonLayout);
 
     // 连接信号与槽
-    connect(m_okButton, &QPushButton::clicked, this, &AddProductDialog::onOkClicked);
-    connect(m_cancelButton, &QPushButton::clicked, this, &AddProductDialog::onCancelClicked);
+    connect(m_okButton, &QPushButton::clicked, this, &EditProductDialog::onOkClicked);
+    connect(m_cancelButton, &QPushButton::clicked, this, &EditProductDialog::onCancelClicked);
 
     // 设置对话框大小
-    resize(350, 220);
+    resize(350, 250);
 }
 
-AddProductDialog::~AddProductDialog()
+EditProductDialog::~EditProductDialog()
 {
     // 不需要手动释放UI组件，Qt的布局会自动处理
 }
 
-std::string AddProductDialog::getProductName() const
+void EditProductDialog::setProductInfo(const Product& product)
+{
+    m_productId = product.id;
+    m_productIdEdit->setText(QString::number(product.id));
+    m_productNameEdit->setText(QString::fromStdString(product.name));
+    m_productPriceEdit->setText(QString::number(product.price, 'f', 2));
+    m_productStockEdit->setText(QString::number(product.stock));
+    // 预警阈值会通过单独的函数设置
+}
+
+void EditProductDialog::setProductAlertThreshold(int threshold)
+{
+    m_productAlertThreshold = threshold;
+    m_productAlertThresholdEdit->setText(QString::number(threshold));
+}
+
+std::string EditProductDialog::getProductName() const
 {
     return m_productNameEdit->text().toStdString();
 }
 
-double AddProductDialog::getProductPrice() const
+double EditProductDialog::getProductPrice() const
 {
     return m_productPriceEdit->text().toDouble();
 }
 
-int AddProductDialog::getProductStock() const
+int EditProductDialog::getProductStock() const
 {
     return m_productStockEdit->text().toInt();
 }
 
-int AddProductDialog::getProductAlertThreshold() const
+int EditProductDialog::getProductAlertThreshold() const
 {
     return m_productAlertThresholdEdit->text().toInt();
 }
 
-void AddProductDialog::onOkClicked()
+int EditProductDialog::getProductId() const
+{
+    return m_productId;
+}
+
+void EditProductDialog::onOkClicked()
 {
     // 验证输入
     if (m_productNameEdit->text().trimmed().isEmpty()) {
@@ -124,7 +155,7 @@ void AddProductDialog::onOkClicked()
     accept();
 }
 
-void AddProductDialog::onCancelClicked()
+void EditProductDialog::onCancelClicked()
 {
     // 关闭对话框
     reject();

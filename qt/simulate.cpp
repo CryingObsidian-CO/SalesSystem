@@ -13,6 +13,7 @@
 #include "../sqlite/database.h"
 #include "addproductdialog.h"
 #include "restockdialog.h"
+#include "editproductdialog.h"
 
 
 
@@ -46,7 +47,7 @@ void simulate::on_qx_clicked()
     this->close();
 }
 
-void simulate::updateProductTable()
+void simulate::updateProductTable(const QString& searchText, int stockFilter)
 {
     // 清空表格，显式释放资源
     ui->productTable->setRowCount(0);
@@ -66,9 +67,44 @@ void simulate::updateProductTable()
     }
     
     // 遍历商品列表，添加到表格
-    for (const auto& [id, name, price,
-             stock] : products)
+    for (const auto& [id, name, price, stock] : products)
     {
+        // 搜索筛选
+        bool matchSearch = true;
+        bool matchFilter = true;
+        
+        // 搜索匹配
+        if (!searchText.isEmpty()) {
+            QString productName = QString::fromStdString(name);
+            matchSearch = productName.contains(searchText, Qt::CaseInsensitive);
+        }
+        
+        // 获取商品的预警阈值
+        int threshold = get_product_alert_threshold(id);
+        if (threshold == -1) {
+            threshold = 10; // 默认阈值为10
+        }
+        
+        // 库存状态筛选，基于商品的预警阈值
+        switch (stockFilter) {
+            case 1: // 低库存（≤预警阈值）
+                matchFilter = (stock <= threshold);
+                break;
+            case 2: // 正常（预警阈值+1 ~ 预警阈值*2）
+                matchFilter = (stock > threshold && stock <= threshold * 2);
+                break;
+            case 3: // 充足（>预警阈值*2）
+                matchFilter = (stock > threshold * 2);
+                break;
+            default: // 全部
+                matchFilter = true;
+                break;
+        }
+        
+        if (!matchSearch || !matchFilter) {
+            continue; // 不匹配，跳过该商品
+        }
+        
         const int row = ui->productTable->rowCount();
         ui->productTable->insertRow(row);
 
@@ -115,6 +151,12 @@ void simulate::updateProductTable()
         connect(spinBox, QOverload<int>::of(&QSpinBox::valueChanged), 
                 this, [this, id](int value) { onQuantityChanged(value, id); });
     }
+}
+
+// 重载版本，默认显示所有商品
+void simulate::updateProductTable()
+{
+    updateProductTable(QString(), 0);
 }
 
 void simulate::checkQuantity(int productId, int quantity)
@@ -241,6 +283,7 @@ void simulate::on_addProductButton_clicked()
         std::string productName = dialog.getProductName();
         double productPrice = dialog.getProductPrice();
         int productStock = dialog.getProductStock();
+        int productThreshold = dialog.getProductAlertThreshold();
 
         // 检查商品名称是否已存在
         Product existingProduct = query_product(productName);
@@ -258,10 +301,10 @@ void simulate::on_addProductButton_clicked()
             }
         }
 
-        // 添加商品到数据库
-        if (add_product(productName, productPrice, productStock)) {
+        // 添加商品到数据库，使用用户设置的预警阈值
+        if (add_product(productName, productPrice, productStock, productThreshold)) {
             // 添加成功，更新商品表格
-            updateProductTable();
+            updateProductTable(ui->searchEdit->text(), ui->stockFilterComboBox->currentIndex());
             QMessageBox::information(this, "提示", QString("商品 '%1' 添加成功！").arg(QString::fromStdString(productName)));
         } else {
             // 添加失败
@@ -277,7 +320,69 @@ void simulate::on_restockButton_clicked()
     dialog.exec();
     
     // 补货完成后，刷新商品表格
-    updateProductTable();
+    updateProductTable(ui->searchEdit->text(), ui->stockFilterComboBox->currentIndex());
+}
+
+void simulate::on_editProductButton_clicked()
+{
+    // 获取当前选中的行
+    const QModelIndexList selectedIndexes = ui->productTable->selectionModel()->selectedRows();
+    if (selectedIndexes.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先选择要修改的商品行");
+        return;
+    }
+    
+    // 获取选中行的商品ID
+    const int selectedRow = selectedIndexes.first().row();
+    QTableWidgetItem* idItem = ui->productTable->item(selectedRow, 0);
+    
+    if (!idItem) {
+        QMessageBox::warning(this, "警告", "无法获取选中商品的信息");
+        return;
+    }
+    
+    int productId = idItem->text().toInt();
+    
+    // 查询商品详细信息
+    Product product = query_product(productId);
+    if (product.id == -1) {
+        QMessageBox::warning(this, "警告", QString("无法找到ID为 %1 的商品").arg(productId));
+        return;
+    }
+    
+    // 获取当前商品的预警阈值
+    int currentThreshold = get_product_alert_threshold(productId);
+    
+    // 打开修改商品对话框
+    EditProductDialog dialog(this);
+    dialog.setProductInfo(product);
+    dialog.setProductAlertThreshold(currentThreshold > 0 ? currentThreshold : 10);
+    
+    if (dialog.exec() == QDialog::Accepted) {
+        // 获取修改后的商品信息
+        std::string newName = dialog.getProductName();
+        double newPrice = dialog.getProductPrice();
+        int newStock = dialog.getProductStock();
+        int newThreshold = dialog.getProductAlertThreshold();
+        
+        // 检查商品名称是否已被其他商品使用
+        Product existingProduct = query_product(newName);
+        if (existingProduct.id != -1 && existingProduct.id != productId) {
+            QMessageBox::warning(this, "警告", QString("商品名称 '%1' 已被其他商品使用").arg(QString::fromStdString(newName)));
+            return;
+        }
+        
+        // 更新商品信息
+        std::string errorMsg;
+        if (update_product(productId, newName, newPrice, newStock, newThreshold, &errorMsg)) {
+            // 更新成功，刷新商品表格
+            updateProductTable(ui->searchEdit->text(), ui->stockFilterComboBox->currentIndex());
+            QMessageBox::information(this, "提示", QString("商品 '%1' 修改成功！").arg(QString::fromStdString(newName)));
+        } else {
+            // 更新失败
+            QMessageBox::critical(this, "错误", QString("商品修改失败！\n\n详细错误信息：%1").arg(QString::fromStdString(errorMsg)));
+        }
+    }
 }
 
 void simulate::on_deleteProductButton_clicked()
@@ -317,10 +422,38 @@ void simulate::on_deleteProductButton_clicked()
     // 执行删除操作
     if (delete_product(productId)) {
         // 删除成功，更新商品表格
-        updateProductTable();
+        updateProductTable(ui->searchEdit->text(), ui->stockFilterComboBox->currentIndex());
         QMessageBox::information(this, "提示", QString("商品 '%1' 删除成功！").arg(productName));
     } else {
         // 删除失败
         QMessageBox::critical(this, "错误", QString("商品 '%1' 删除失败！").arg(productName));
     }
+}
+
+void simulate::on_searchButton_clicked()
+{
+    // 获取搜索文本和库存筛选选项
+    QString searchText = ui->searchEdit->text();
+    int stockFilter = ui->stockFilterComboBox->currentIndex();
+    
+    // 更新商品表格
+    updateProductTable(searchText, stockFilter);
+}
+
+void simulate::on_resetButton_clicked()
+{
+    // 清空搜索文本
+    ui->searchEdit->clear();
+    // 重置库存筛选为"全部"
+    ui->stockFilterComboBox->setCurrentIndex(0);
+    // 更新商品表格
+    updateProductTable();
+}
+
+void simulate::on_searchEdit_textChanged(const QString& text)
+{
+    // 实时搜索，获取当前的库存筛选选项
+    int stockFilter = ui->stockFilterComboBox->currentIndex();
+    // 更新商品表格
+    updateProductTable(text, stockFilter);
 }

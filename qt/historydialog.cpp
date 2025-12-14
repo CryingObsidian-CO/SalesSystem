@@ -133,7 +133,7 @@ void HistoryDialog::on_refreshButton_clicked()
 
 void HistoryDialog::checkLowStock()
 {
-    const auto lowStockProducts = get_low_stock_products(10);
+    const auto lowStockProducts = get_low_stock_products();
     if (!lowStockProducts.empty())
     {
         showLowStockWarning();
@@ -142,7 +142,7 @@ void HistoryDialog::checkLowStock()
 
 void HistoryDialog::showLowStockWarning()
 {
-    const auto lowStockProducts = get_low_stock_products(10);
+    const auto lowStockProducts = get_low_stock_products();
     if (lowStockProducts.empty())
         return;
 
@@ -150,7 +150,7 @@ void HistoryDialog::showLowStockWarning()
     for (const auto& product : lowStockProducts)
     {
         warningText += QString::fromStdString(product.name) + ": 库存 " + QString::number(
-            product.stock) + "\n";
+            product.stock) + " (预警阈值: " + QString::number(get_product_alert_threshold(product.id)) + ")\n";
     }
 
     QMessageBox::warning(this, "库存警告", warningText);

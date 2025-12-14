@@ -27,7 +27,8 @@ bool init_db()
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "name TEXT NOT NULL,"
         "price REAL NOT NULL,"
-        "stock INTEGER NOT NULL"
+        "stock INTEGER NOT NULL,"
+        "alert_threshold INTEGER DEFAULT 10 NOT NULL"
         ");";
     const char* sql_create_transactions =
         "CREATE TABLE IF NOT EXISTS transactions ("
@@ -95,10 +96,15 @@ int getIdFromName(const std::string& name)
     return id;
 }
 
-bool add_product(const std::string& name, const double price, const int stock)
+bool add_product(const std::string& name, const double price, const int stock, int alert_threshold)
 {
-    const std::string insert_sql = "INSERT INTO products (name, price, stock) VALUES ('" +
-        std::string(name) + "'," + std::to_string(price) + "," + std::to_string(stock) + ");";
+    // 使用sprintf确保小数点分隔符是点，而非逗号
+    char sql_buffer[512];
+    snprintf(sql_buffer, sizeof(sql_buffer), 
+             "INSERT INTO products (name, price, stock, alert_threshold) VALUES ('%s', %.2f, %d, %d);",
+             name.c_str(), price, stock, alert_threshold);
+    
+    const std::string insert_sql(sql_buffer);
     if (sqlite3_exec(db, insert_sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
     {
         fprintf(stderr, "插入商品失败: %s\n", err_msg);
@@ -117,13 +123,12 @@ Product query_product(const int id)
                      [](void* data, int argc, char** argv, char** col_name) -> int
                      {
                          auto* product_ptr = static_cast<Product*>(data);
-                         for (int i = 0; i < argc; i++)
-                         {
-                             product_ptr->id = std::stoi(argv[0]);
-                             product_ptr->name = argv[1];
-                             product_ptr->price = std::stof(argv[2]);
-                             product_ptr->stock = std::stoi(argv[3]);
-                         }
+                         product_ptr->id = std::stoi(argv[0]);
+                         product_ptr->name = argv[1];
+                         product_ptr->price = std::stof(argv[2]);
+                         product_ptr->stock = std::stoi(argv[3]);
+                         // 注意：alert_threshold字段存在于数据库中，但Product结构体中没有对应字段
+                         // 这里忽略该字段，因为我们会通过专门的函数获取预警阈值
                          return 0;
                      }, &product, &err_msg) != SQLITE_OK)
     {
@@ -167,13 +172,15 @@ std::vector<Product> get_all_products()
     
     if (sqlite3_exec(db, sql, 
                      [](void* data, int argc, char** argv, char** col_name) -> int 
-                     {
+                     {   
                          auto* products_ptr = static_cast<std::vector<Product>*>(data);
                          Product product;
                          product.id = std::stoi(argv[0]);
                          product.name = argv[1];
                          product.price = std::stof(argv[2]);
                          product.stock = std::stoi(argv[3]);
+                         // 注意：alert_threshold字段存在于数据库中，但Product结构体中没有对应字段
+                         // 这里忽略该字段，因为我们会通过专门的函数获取预警阈值
                          products_ptr->push_back(product);
                          return 0;
                      }, &products, &err_msg) != SQLITE_OK)
@@ -319,12 +326,13 @@ std::vector<CartItem> get_cart_items_by_transaction_id(const int transaction_id)
     return cart_items;
 }
 
-std::vector<Product> get_low_stock_products(const int threshold)
+std::vector<Product> get_low_stock_products()
 {
     std::vector<Product> low_stock_products;
-    const std::string sql = "SELECT * FROM products WHERE stock <= " + std::to_string(threshold) + ";";
+    // 查询库存低于或等于其预警阈值的商品
+    const char* sql = "SELECT * FROM products WHERE stock <= alert_threshold;";
     
-    if (sqlite3_exec(db, sql.c_str(), 
+    if (sqlite3_exec(db, sql, 
                      [](void* data, int argc, char** argv, char** col_name) -> int 
                      {   
                          auto* products_ptr = static_cast<std::vector<Product>*>(data);
@@ -387,4 +395,149 @@ bool delete_product(const std::string& name)
     
     printf("商品 '%s' 删除成功\n", name.c_str());
     return true;
+}
+
+bool update_product(int id, const std::string& name, double price, int stock, int alert_threshold, std::string* errorMsg)
+{
+    // 先查询商品是否存在
+    Product existingProduct = query_product(id);
+    if (existingProduct.id == -1) {
+        std::string err = "更新商品失败: 未找到ID为 " + std::to_string(id) + " 的商品";
+        fprintf(stderr, "%s\n", err.c_str());
+        if (errorMsg) *errorMsg = err;
+        return false;
+    }
+    
+    // 使用sprintf确保小数点分隔符是点，而非逗号
+    char sql_buffer[512];
+    snprintf(sql_buffer, sizeof(sql_buffer), 
+             "UPDATE products SET name = '%s', price = %.2f, stock = %d, alert_threshold = %d WHERE id = %d;",
+             name.c_str(), price, stock, alert_threshold, id);
+    
+    const std::string update_sql(sql_buffer);
+    printf("执行SQL: %s\n", update_sql.c_str());
+    
+    // 执行SQL语句
+    int rc = sqlite3_exec(db, update_sql.c_str(), nullptr, nullptr, &err_msg);
+    if (rc != SQLITE_OK)
+    {
+        std::string err = "更新商品失败: " + std::string(err_msg);
+        fprintf(stderr, "%s\n", err.c_str());
+        sqlite3_free(err_msg);
+        if (errorMsg) *errorMsg = err;
+        return false;
+    }
+    
+    // 检查是否有记录被更新
+    int changes = sqlite3_changes(db);
+    printf("SQL执行影响的行数: %d\n", changes);
+    
+    if (changes == 0)
+    {
+        // 没有记录被更新，可能是因为所有字段值都没有变化
+        fprintf(stderr, "更新商品提示: ID为 %d 的商品没有任何字段值变化\n", id);
+        // 返回true，因为商品信息已经是最新的
+        return true;
+    }
+    
+    printf("商品ID %d 更新成功\n", id);
+    return true;
+}
+
+bool update_product(const std::string& old_name, const std::string& new_name, double price, int stock, int alert_threshold, std::string* errorMsg)
+{
+    // 先查询商品是否存在
+    int productId = getIdFromName(old_name);
+    if (productId == -1) {
+        std::string err = "更新商品失败: 未找到名称为 '" + old_name + "' 的商品";
+        fprintf(stderr, "%s\n", err.c_str());
+        if (errorMsg) *errorMsg = err;
+        return false;
+    }
+    
+    // 调用第一个update_product函数来执行更新
+    return update_product(productId, new_name, price, stock, alert_threshold, errorMsg);
+}
+
+bool set_product_alert_threshold(int id, int threshold)
+{
+    // 先查询商品是否存在
+    Product existingProduct = query_product(id);
+    if (existingProduct.id == -1) {
+        fprintf(stderr, "更新商品预警阈值失败: 未找到ID为 %d 的商品\n", id);
+        return false;
+    }
+    
+    // 使用sprintf确保SQL语句格式正确
+    char sql_buffer[512];
+    snprintf(sql_buffer, sizeof(sql_buffer), 
+             "UPDATE products SET alert_threshold = %d WHERE id = %d;",
+             threshold, id);
+    
+    const std::string update_sql(sql_buffer);
+    
+    if (sqlite3_exec(db, update_sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "更新商品预警阈值失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return false;
+    }
+    
+    // 检查是否有记录被更新
+    int changes = sqlite3_changes(db);
+    if (changes == 0)
+    {
+        // 没有记录被更新，可能是因为预警阈值没有变化
+        fprintf(stderr, "更新商品预警阈值提示: ID为 %d 的商品预警阈值没有变化\n", id);
+        // 返回true，因为预警阈值已经是最新的
+        return true;
+    }
+    
+    printf("商品ID %d 预警阈值更新成功\n", id);
+    return true;
+}
+
+bool set_product_alert_threshold(const std::string& name, int threshold)
+{
+    // 先通过名称获取商品ID
+    int productId = getIdFromName(name);
+    if (productId == -1) {
+        fprintf(stderr, "更新商品预警阈值失败: 未找到名称为 '%s' 的商品\n", name.c_str());
+        return false;
+    }
+    
+    // 使用ID来更新，更可靠
+    return set_product_alert_threshold(productId, threshold);
+}
+
+int get_product_alert_threshold(int id)
+{
+    int threshold = -1;
+    const std::string sql = "SELECT alert_threshold FROM products WHERE id = " + std::to_string(id) + ";";
+    
+    if (sqlite3_exec(db, sql.c_str(),
+                     [](void* data, int argc, char** argv, char** col_name) -> int
+                     {
+                         int* threshold_ptr = static_cast<int*>(data);
+                         *threshold_ptr = std::stoi(argv[0]);
+                         return 0;
+                     }, &threshold, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "查询商品预警阈值失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+    
+    return threshold;
+}
+
+int get_product_alert_threshold(const std::string& name)
+{
+    int id = getIdFromName(name);
+    if (id == -1)
+    {
+        return -1;
+    }
+    
+    return get_product_alert_threshold(id);
 }

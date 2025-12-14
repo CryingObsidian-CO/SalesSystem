@@ -40,6 +40,8 @@ private:
 
     // 更新商品表格
     void updateProductTable();
+    // 更新商品表格（带搜索和筛选条件）
+    void updateProductTable(const QString& searchText, int stockFilter);
 
     // 检查数量是否超过库存
     void checkQuantity(int productId, int quantity);
@@ -50,7 +52,11 @@ private slots:
     void onQuantityChanged(int value, int productId);
     void on_addProductButton_clicked();
     void on_restockButton_clicked();
+    void on_editProductButton_clicked();
     void on_deleteProductButton_clicked();
+    void on_searchButton_clicked();
+    void on_resetButton_clicked();
+    void on_searchEdit_textChanged(const QString& text);
 };
 
 
