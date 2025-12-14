@@ -95,38 +95,10 @@ int getIdFromName(const std::string& name)
     return id;
 }
 
-int getTransactionIdFromCreateTime(const std::string& create_time)
-{
-    const std::string sql = "SELECT transaction_id FROM transactions WHERE create_time = '" +
-        create_time + "';";
-    if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
-    {
-        fprintf(stderr, "查询交易ID失败: %s\n", err_msg);
-        sqlite3_free(err_msg);
-        return -1;
-    }
-
-    return transaction_id;
-}
-
-int getCartItemIdFromCreateTime(const std::string& create_time)
-{
-    const std::string sql = "SELECT item_id FROM cart_items WHERE transaction_id = (SELECT "
-        "transaction_id FROM transactions WHERE create_time = '" + create_time + "');";
-    if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
-    {
-        fprintf(stderr, "查询购物车项ID失败: %s\n", err_msg);
-        sqlite3_free(err_msg);
-        return -1;
-    }
-
-    return item_id;
-}
-
 bool add_product(const std::string& name, const double price, const int stock)
 {
-    const std::string insert_sql = "INSERT INTO products (name, price, stock) VALUES (" +
-        std::string(name) + "," + std::to_string(price) + "," + std::to_string(stock) + ");";
+    const std::string insert_sql = "INSERT INTO products (name, price, stock) VALUES ('" +
+        std::string(name) + "'," + std::to_string(price) + "," + std::to_string(stock) + ");";
     if (sqlite3_exec(db, insert_sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
     {
         fprintf(stderr, "插入商品失败: %s\n", err_msg);
@@ -137,39 +109,6 @@ bool add_product(const std::string& name, const double price, const int stock)
     return true;
 }
 
-bool add_transaction(const std::string& create_time, const bool is_paid,
-                     const double total_price, const double amount_paid, const double change)
-{
-    const std::string insert_sql = "INSERT INTO transactions (create_time, is_paid, total_price, "
-        "amount_paid, change) VALUES (" + create_time + "," + std::to_string(is_paid) + "," +
-        std::to_string(total_price) + "," + std::to_string(amount_paid) + "," +
-        std::to_string(change) + ");";
-    if (sqlite3_exec(db, insert_sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
-    {
-        fprintf(stderr, "插入交易记录失败: %s\n", err_msg);
-        sqlite3_free(err_msg);
-        return false;
-    }
-    printf("交易记录添加成功\n");
-    return true;
-}
-
-bool add_cart_item(const int transaction_id, const int product_id,
-                   const int quantity, const double subtotal)
-{
-    const std::string insert_sql = "INSERT INTO cart_items (transaction_id, product_id, "
-        "quantity, subtotal) VALUES (" + std::to_string(transaction_id) + "," +
-        std::to_string(product_id) + "," + std::to_string(quantity) + "," +
-        std::to_string(subtotal) + ");";
-    if (sqlite3_exec(db, insert_sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
-    {
-        fprintf(stderr, "插入购物车项失败: %s\n", err_msg);
-        sqlite3_free(err_msg);
-        return false;
-    }
-    printf("购物车项添加成功\n");
-    return true;
-}
 Product query_product(const int id)
 {
     Product product = {-1, "", 0.0f, 0};
@@ -202,46 +141,6 @@ Product query_products(const std::string& name)
     return query_product(getIdFromName(name));
 }
 
-bool query_transaction(const int transaction_id)
-{
-    const std::string sql = "SELECT * FROM transactions WHERE transaction_id = " +
-        std::to_string(transaction_id) + ";";
-    if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
-    {
-        fprintf(stderr, "查询交易记录失败: %s\n", err_msg);
-        sqlite3_free(err_msg);
-        return false;
-    }
-
-    printf("交易记录查询完成\n");
-    return true;
-}
-
-int query_transaction(const std::string& create_time)
-{
-    query_transaction(getIdFromName(create_time));
-}
-
-bool query_cart_items(const int transaction_id)
-{
-    const std::string sql = "SELECT * FROM cart_items WHERE transaction_id = " +
-        std::to_string(transaction_id) + ";";
-    if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
-    {
-        fprintf(stderr, "查询购物车项失败: %s\n", err_msg);
-        sqlite3_free(err_msg);
-        return false;
-    }
-
-    printf("购物车项查询完成\n");
-    return true;
-}
-
-int query_cart_items(const std::string& create_time)
-{
-    query_cart_items(getIdFromName(create_time));
-}
-
 bool update_stock(const int id, const int new_stock)
 {
     const std::string sql = "UPDATE products SET stock = " + std::to_string(new_stock) +
@@ -261,47 +160,28 @@ int update_stock(const std::string& name, const int new_stock)
     return update_stock(getIdFromName(name), new_stock);
 }
 
-bool update_transaction_payment(const int transaction_id, const bool is_paid,
-                                const double amount_paid, const double change)
+std::vector<Product> get_all_products()
 {
-    const std::string sql = "UPDATE transactions SET is_paid = " + std::to_string(is_paid) +
-        ", amount_paid = " + std::to_string(amount_paid) + ", change = " +
-        std::to_string(change) + " WHERE transaction_id = " +
-        std::to_string(transaction_id) + ";";
-    if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
+    std::vector<Product> products;
+    const char* sql = "SELECT * FROM products;";
+    
+    if (sqlite3_exec(db, sql, 
+                     [](void* data, int argc, char** argv, char** col_name) -> int 
+                     {
+                         auto* products_ptr = static_cast<std::vector<Product>*>(data);
+                         Product product;
+                         product.id = std::stoi(argv[0]);
+                         product.name = argv[1];
+                         product.price = std::stof(argv[2]);
+                         product.stock = std::stoi(argv[3]);
+                         products_ptr->push_back(product);
+                         return 0;
+                     }, &products, &err_msg) != SQLITE_OK)
     {
-        fprintf(stderr, "更新交易支付信息失败: %s\n", err_msg);
+        fprintf(stderr, "查询所有商品失败: %s\n", err_msg);
         sqlite3_free(err_msg);
-        return false;
+        return products;
     }
-    printf("交易ID %d 支付信息更新成功\n", transaction_id);
-    return true;
-}
-
-int update_transaction_payment(const std::string& create_time, const bool is_paid,
-                               const double amount_paid, const double change)
-{
-    return update_transaction_payment(getTransactionIdFromCreateTime(create_time), is_paid,
-                                      amount_paid, change);
-}
-
-bool update_cart_item_quantity(const int item_id, const int new_quantity, const double new_subtotal)
-{
-    const std::string sql = "UPDATE cart_items SET quantity = " + std::to_string(new_quantity) +
-        ", subtotal = " + std::to_string(new_subtotal) + " WHERE item_id = " +
-        std::to_string(item_id) + ";";
-    if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
-    {
-        fprintf(stderr, "更新购物车项失败: %s\n", err_msg);
-        sqlite3_free(err_msg);
-        return false;
-    }
-    printf("购物车项ID %d 更新成功\n", item_id);
-    return true;
-}
-
-int update_cart_item_quantity(const std::string& create_time, const int new_quantity,
-                              const double new_subtotal)
-{
-    return update_cart_item_quantity(getCartItemIdFromCreateTime(create_time), new_quantity, new_subtotal);
+    
+    return products;
 }

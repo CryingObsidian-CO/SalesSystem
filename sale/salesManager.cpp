@@ -1,11 +1,13 @@
 #include "saleStruct.h"
+#include <ctime>
 
 // 创建新交易
-Transaction createNewTransaction(const ShoppingCart& cart) {
+Transaction createNewTransaction(const ShoppingCart& cart)
+{
     // 实现创建新交易的逻辑
     Transaction transaction;
     transaction.transaction_id = 0; // uuid
-    transaction.cart= cart;
+    transaction.cart = cart;
     transaction.create_time = time(nullptr); // time
     transaction.is_paid = false;
     transaction.total_price = cart.total_price;
@@ -15,31 +17,31 @@ Transaction createNewTransaction(const ShoppingCart& cart) {
 }
 
 // 完成交易
-Transaction completeTransaction(Transaction& transaction, const float amountPaid) {
+Transaction completeTransaction(Transaction& transaction, const float amountPaid)
+{
     // 实现完成交易的逻辑
     transaction.amount_paid = amountPaid;
     transaction.total_price = transaction.cart.total_price;
     transaction.change = amountPaid - transaction.total_price;
     transaction.is_paid = true;
-    
+
     // 这里需要更新库存，后续会调用库存管理模块的函数
-    
+
     return transaction;
 }
 
 
-
-
-
 // 获取销售记录列表
-std::vector<Transaction> getSalesRecords() {
+std::vector<Transaction> getSalesRecords()
+{
     // 返回销售记录列表，数据库交互部分暂不实现
     std::vector<Transaction> transactions;
     return transactions;
 }
 
 // 根据时间范围获取销售记录
-std::vector<Transaction> getSalesRecordsByTimeRange(time_t startTime, time_t endTime) {
+std::vector<Transaction> getSalesRecordsByTimeRange(time_t startTime, time_t endTime)
+{
     // 实现按时间范围查询销售记录，数据库交互部分暂不实现
     std::vector<Transaction> transactions;
     return transactions;

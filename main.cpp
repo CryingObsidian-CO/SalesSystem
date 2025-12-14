@@ -1,10 +1,19 @@
 #include <QApplication>
-#include <QPushButton>
+#include "mainwindow.h"
+#include "sqlite/database.h"
+#include <iostream>
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[])
+{
+    // 初始化数据库
+    if (!init_db())
+    {
+        std::cerr << "数据库初始化失败\n";
+        return 1;
+    }
+
     QApplication a(argc, argv);
-    QPushButton button("Hello world!", nullptr);
-    button.resize(200, 100);
-    button.show();
+    MainWindow w;
+    w.show();
     return QApplication::exec();
 }

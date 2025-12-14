@@ -13,8 +13,8 @@ set(SQLITE3_LIBRARY "${PROJECT_SOURCE_DIR}/third_party/sqlite/lib/sqlite3.dll")
 # 创建SQLite3目标
 add_library(SQLite3::SQLite3 UNKNOWN IMPORTED)
 set_target_properties(SQLite3::SQLite3 PROPERTIES
-    IMPORTED_LOCATION "${SQLITE3_LIBRARY}"
-    INTERFACE_INCLUDE_DIRECTORIES "${SQLITE3_INCLUDE_DIR}"
+        IMPORTED_LOCATION "${SQLITE3_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${SQLITE3_INCLUDE_DIR}"
 )
 
 find_package(Qt6 COMPONENTS
@@ -26,11 +26,19 @@ find_package(Qt6 COMPONENTS
 add_executable(SalesSystem_ main.cpp
         sqlite/database.cpp
         sale/salesManager.cpp
-        sale/saleStruct.h
         sale/stockManager.cpp
         sale/saleStruct.cpp
-        sale/saleStruct.cpp
         sale/shoppingCart.cpp
+        qt/mainwindow.cpp
+        qt/simulate.cpp
+        qt/simulate.h
+        qt/simulate.ui
+)
+target_include_directories(SalesSystem_ PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/qt
+        ${CMAKE_CURRENT_SOURCE_DIR}/sale
+        ${CMAKE_CURRENT_SOURCE_DIR}/sqlite
 )
 target_link_libraries(SalesSystem_
         Qt::Core
@@ -67,3 +75,8 @@ if (WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
                 "$<TARGET_FILE_DIR:${PROJECT_NAME}>")
     endforeach (QT_LIB)
 endif ()
+
+#if (MINGW)
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer -O0")
+#    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+#endif ()
