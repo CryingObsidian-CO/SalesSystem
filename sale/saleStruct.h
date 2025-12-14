@@ -38,7 +38,5 @@ typedef struct {
     float change;           // 找零金额
 } Transaction;
 
-auto findProductFromId(std::vector<CartItem>& items, int id) -> decltype(items.begin());
-float get_price_from_id(int id);
 
 #endif // SALE_STRUCT_H

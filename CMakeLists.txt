@@ -25,10 +25,6 @@ find_package(Qt6 COMPONENTS
 
 add_executable(SalesSystem_ WIN32 main.cpp
         sqlite/database.cpp
-        sale/salesManager.cpp
-        sale/stockManager.cpp
-        sale/saleStruct.cpp
-        sale/shoppingCart.cpp
         qt/mainwindow.cpp
         qt/simulate.cpp
         qt/simulate.h

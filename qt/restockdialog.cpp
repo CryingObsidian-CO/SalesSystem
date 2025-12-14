@@ -1,7 +1,8 @@
 #include "restockdialog.h"
 #include <QMessageBox>
 #include <QTableWidgetItem>
-#include "../sqlite/database.h"
+#include <climits>
+#include "database.h"
 
 RestockDialog::RestockDialog(QWidget* parent)
     : QDialog(parent)
@@ -18,7 +19,7 @@ RestockDialog::RestockDialog(QWidget* parent)
 
     auto* restockQuantityLabel = new QLabel("补货数量:");
     m_restockQuantityEdit = new QLineEdit();
-    m_restockQuantityEdit->setValidator(new QIntValidator(1, 999999, this));
+    m_restockQuantityEdit->setValidator(new QIntValidator(1, INT_MAX, this));
     m_restockQuantityEdit->setPlaceholderText("请输入补货数量");
     m_restockQuantityEdit->setMinimumWidth(150);
 
@@ -151,12 +152,15 @@ void RestockDialog::restockProduct()
     }
 
     // 获取补货数量
-    int restockQuantity = m_restockQuantityEdit->text().toInt();
-    if (restockQuantity <= 0)
+    bool conversionOk;
+    long long restockQuantityLL = m_restockQuantityEdit->text().toLongLong(&conversionOk);
+    if (!conversionOk || restockQuantityLL <= 0 || restockQuantityLL > INT_MAX)
     {
         QMessageBox::warning(this, "警告", "请输入有效的补货数量");
         return;
     }
+    
+    int restockQuantity = static_cast<int>(restockQuantityLL);
 
     // 获取商品当前库存
     Product product = query_product(productId);
@@ -167,7 +171,19 @@ void RestockDialog::restockProduct()
     }
 
     // 计算新库存
-    int newStock = product.stock + restockQuantity;
+    long long newStockLL = static_cast<long long>(product.stock) + restockQuantity;
+    
+    // 检查是否溢出
+    if (newStockLL > INT_MAX)
+    {
+        QMessageBox::warning(this, "警告",
+                             QString("商品 '%1' 补货失败！\n库存总和超过系统最大值(%2)")
+                             .arg(QString::fromStdString(product.name))
+                             .arg(INT_MAX));
+        return;
+    }
+    
+    int newStock = static_cast<int>(newStockLL);
 
     // 更新库存
     if (update_stock(productId, newStock))
