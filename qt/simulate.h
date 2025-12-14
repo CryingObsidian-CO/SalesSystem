@@ -48,6 +48,8 @@ private slots:
     void on_qx_clicked();
     void on_qd_clicked();
     void onQuantityChanged(int value, int productId);
+    void on_addProductButton_clicked();
+    void on_restockButton_clicked();
 };
 
 

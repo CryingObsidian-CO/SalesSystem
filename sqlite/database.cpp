@@ -136,7 +136,7 @@ Product query_product(const int id)
     return product;
 }
 
-Product query_products(const std::string& name)
+Product query_product(const std::string& name)
 {
     return query_product(getIdFromName(name));
 }

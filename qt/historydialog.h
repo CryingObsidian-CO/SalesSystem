@@ -26,7 +26,7 @@ private slots:
 private:
     Ui::HistoryDialog *ui;
     void loadTransactions();
-    void showTransactionDetails(int transactionId);
+    void showTransactionDetails(int transactionId) const;
     void showLowStockWarning();
 };
 #endif // HISTORYDIALOG_H

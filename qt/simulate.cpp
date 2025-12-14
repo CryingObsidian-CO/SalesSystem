@@ -11,6 +11,8 @@
 #include <QSpinBox>
 #include "mainwindow.h"
 #include "../sqlite/database.h"
+#include "addproductdialog.h"
+#include "restockdialog.h"
 
 
 
@@ -25,6 +27,9 @@ simulate::simulate(QWidget* parent) :
     {
         m_mainWindow = dynamic_cast<MainWindow*>(parent);
     }
+
+    // 连接添加商品按钮信号
+    connect(ui->addProductButton, &QPushButton::clicked, this, &simulate::on_addProductButton_clicked);
 
     // 初始化商品表格
     updateProductTable();
@@ -225,4 +230,52 @@ void simulate::on_qd_clicked()
     
     // 关闭模拟窗口
     this->close();
+}
+
+void simulate::on_addProductButton_clicked()
+{
+    // 创建添加商品对话框
+    AddProductDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+        // 获取输入的商品信息
+        std::string productName = dialog.getProductName();
+        double productPrice = dialog.getProductPrice();
+        int productStock = dialog.getProductStock();
+
+        // 检查商品名称是否已存在
+        Product existingProduct = query_product(productName);
+        if (existingProduct.id != -1) {
+            // 商品名称已存在，弹出警告对话框
+            QMessageBox::StandardButton reply;
+            reply = QMessageBox::warning(this, "警告", 
+                                         QString("商品名称 '%1' 已存在，是否继续添加？").arg(QString::fromStdString(productName)),
+                                         QMessageBox::Yes | QMessageBox::No, 
+                                         QMessageBox::No);
+            
+            if (reply == QMessageBox::No) {
+                // 用户选择不继续添加，返回
+                return;
+            }
+        }
+
+        // 添加商品到数据库
+        if (add_product(productName, productPrice, productStock)) {
+            // 添加成功，更新商品表格
+            updateProductTable();
+            QMessageBox::information(this, "提示", QString("商品 '%1' 添加成功！").arg(QString::fromStdString(productName)));
+        } else {
+            // 添加失败
+            QMessageBox::critical(this, "错误", QString("商品 '%1' 添加失败！").arg(QString::fromStdString(productName)));
+        }
+    }
+}
+
+void simulate::on_restockButton_clicked()
+{
+    // 创建并显示补货窗口
+    RestockDialog dialog(this);
+    dialog.exec();
+    
+    // 补货完成后，刷新商品表格
+    updateProductTable();
 }

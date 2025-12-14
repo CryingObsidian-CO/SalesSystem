@@ -48,9 +48,20 @@
    </item>
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_4">
-     <property name="spacing">
-      <number>230</number>
-     </property>
+     <item>
+      <widget class="QPushButton" name="addProductButton">
+       <property name="text">
+        <string>添加商品</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="restockButton">
+       <property name="text">
+        <string>补货</string>
+       </property>
+      </widget>
+     </item>
      <item>
       <spacer name="horizontalSpacer">
        <property name="orientation">

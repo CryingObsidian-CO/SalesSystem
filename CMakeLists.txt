@@ -35,6 +35,10 @@ add_executable(SalesSystem_ WIN32 main.cpp
         qt/simulate.ui
         qt/manualadddialog.cpp
         qt/manualadddialog.h
+        qt/addproductdialog.cpp
+        qt/addproductdialog.h
+        qt/restockdialog.cpp
+        qt/restockdialog.h
         qt/settlementdialog.cpp
         qt/settlementdialog.h
         qt/historydialog.cpp
