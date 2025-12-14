@@ -344,3 +344,47 @@ std::vector<Product> get_low_stock_products(const int threshold)
     
     return low_stock_products;
 }
+
+bool delete_product(const int id)
+{
+    const std::string delete_sql = "DELETE FROM products WHERE id = " + std::to_string(id) + ";";
+    if (sqlite3_exec(db, delete_sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "删除商品失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return false;
+    }
+    
+    // 检查是否有记录被删除
+    int changes = sqlite3_changes(db);
+    if (changes == 0)
+    {
+        fprintf(stderr, "未找到ID为 %d 的商品\n", id);
+        return false;
+    }
+    
+    printf("商品ID %d 删除成功\n", id);
+    return true;
+}
+
+bool delete_product(const std::string& name)
+{
+    const std::string delete_sql = "DELETE FROM products WHERE name = '" + name + "';";
+    if (sqlite3_exec(db, delete_sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "删除商品失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return false;
+    }
+    
+    // 检查是否有记录被删除
+    int changes = sqlite3_changes(db);
+    if (changes == 0)
+    {
+        fprintf(stderr, "未找到名称为 '%s' 的商品\n", name.c_str());
+        return false;
+    }
+    
+    printf("商品 '%s' 删除成功\n", name.c_str());
+    return true;
+}

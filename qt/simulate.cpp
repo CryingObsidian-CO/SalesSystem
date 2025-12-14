@@ -279,3 +279,48 @@ void simulate::on_restockButton_clicked()
     // 补货完成后，刷新商品表格
     updateProductTable();
 }
+
+void simulate::on_deleteProductButton_clicked()
+{
+    // 获取当前选中的行
+    const QModelIndexList selectedIndexes = ui->productTable->selectionModel()->selectedRows();
+    if (selectedIndexes.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先选择要删除的商品行");
+        return;
+    }
+    
+    // 获取选中行的商品ID和名称
+    const int selectedRow = selectedIndexes.first().row();
+    QTableWidgetItem* idItem = ui->productTable->item(selectedRow, 0);
+    QTableWidgetItem* nameItem = ui->productTable->item(selectedRow, 1);
+    
+    if (!idItem || !nameItem) {
+        QMessageBox::warning(this, "警告", "无法获取选中商品的信息");
+        return;
+    }
+    
+    int productId = idItem->text().toInt();
+    QString productName = nameItem->text();
+    
+    // 弹出确认对话框
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::warning(this, "确认删除", 
+                                 QString("确定要删除商品 '%1' 吗？\n此操作不可恢复！").arg(productName),
+                                 QMessageBox::Yes | QMessageBox::No, 
+                                 QMessageBox::No);
+    
+    if (reply == QMessageBox::No) {
+        // 用户选择取消删除
+        return;
+    }
+    
+    // 执行删除操作
+    if (delete_product(productId)) {
+        // 删除成功，更新商品表格
+        updateProductTable();
+        QMessageBox::information(this, "提示", QString("商品 '%1' 删除成功！").arg(productName));
+    } else {
+        // 删除失败
+        QMessageBox::critical(this, "错误", QString("商品 '%1' 删除失败！").arg(productName));
+    }
+}

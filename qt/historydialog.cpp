@@ -46,6 +46,9 @@ void HistoryDialog::loadTransactions()
     QStandardItemModel* model = static_cast<QStandardItemModel*>(ui->transactionTable->model());
     model->setRowCount(0);
 
+    // 计算总交易金额
+    double totalAmount = 0.0;
+
     for (const auto& transaction : transactions)
     {
         QList<QStandardItem*> row;
@@ -70,7 +73,15 @@ void HistoryDialog::loadTransactions()
         row << new QStandardItem(QString::asprintf("%.2f", transaction.change));
 
         model->appendRow(row);
+
+        // 累加总金额（只统计已支付的交易）
+        if (transaction.is_paid) {
+            totalAmount += transaction.total_price;
+        }
     }
+
+    // 显示总交易金额
+    ui->totalAmountLabel->setText(QString::asprintf("¥%.2f", totalAmount));
 }
 
 void HistoryDialog::on_transactionTable_doubleClicked(const QModelIndex& index)

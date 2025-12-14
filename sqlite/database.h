@@ -15,6 +15,8 @@ bool save_transaction(const Transaction& transaction);
 std::vector<Transaction> get_all_transactions();
 std::vector<CartItem> get_cart_items_by_transaction_id(int transaction_id);
 std::vector<Product> get_low_stock_products(int threshold = 10);
+bool delete_product(int id);
+bool delete_product(const std::string& name);
 
 
 #endif // DATABASE_H
