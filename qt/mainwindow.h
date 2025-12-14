@@ -4,9 +4,11 @@
 #include <QMainWindow>
 #include "simulate.h"
 #include "saleStruct.h"
+#include "historydialog.h"
 
 class ManualAddDialog;
 class SettlementDialog;
+class HistoryDialog;
 
 QT_BEGIN_NAMESPACE
 
@@ -41,5 +43,6 @@ private slots:
     void on_sdtj_clicked();
     void on_qk_clicked();
     void on_jiesuan_clicked();
+    void on_historyButton_clicked();
 };
 #endif // MAINWINDOW_H

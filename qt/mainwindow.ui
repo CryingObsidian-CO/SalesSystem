@@ -83,6 +83,19 @@
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QPushButton" name="historyButton">
+          <property name="maximumSize">
+           <size>
+            <width>157</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>历史记录</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </item>
       <item>

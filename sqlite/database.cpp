@@ -252,3 +252,95 @@ bool save_transaction(const Transaction& transaction)
     printf("交易记录保存成功，交易ID: %d\n", transaction_id);
     return true;
 }
+
+std::vector<Transaction> get_all_transactions()
+{
+    std::vector<Transaction> transactions;
+    const char* sql = "SELECT * FROM transactions ORDER BY create_time DESC;";
+    
+    if (sqlite3_exec(db, sql, 
+                     [](void* data, int argc, char** argv, char** col_name) -> int 
+                     {   
+                         auto* transactions_ptr = static_cast<std::vector<Transaction>*>(data);
+                         Transaction transaction;
+                         transaction.transaction_id = std::stoi(argv[0]);
+                         transaction.create_time = std::stol(argv[1]);
+                         transaction.is_paid = std::stoi(argv[2]) != 0;
+                         transaction.total_price = std::stof(argv[3]);
+                         transaction.amount_paid = std::stof(argv[4]);
+                         transaction.change = std::stof(argv[5]);
+                         transactions_ptr->push_back(transaction);
+                         return 0;
+                     }, &transactions, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "查询所有交易记录失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return transactions;
+    }
+    
+    return transactions;
+}
+
+std::vector<CartItem> get_cart_items_by_transaction_id(const int transaction_id)
+{
+    std::vector<CartItem> cart_items;
+    const std::string sql = "SELECT ci.*, p.id, p.name, p.price, p.stock "
+                           "FROM cart_items ci "
+                           "JOIN products p ON ci.product_id = p.id "
+                           "WHERE ci.transaction_id = " + std::to_string(transaction_id) + ";";
+    
+    if (sqlite3_exec(db, sql.c_str(), 
+                     [](void* data, int argc, char** argv, char** col_name) -> int 
+                     {   
+                         auto* cart_items_ptr = static_cast<std::vector<CartItem>*>(data);
+                         CartItem cart_item;
+                         
+                         // cart_items表的列：item_id, transaction_id, product_id, quantity, subtotal (5列)
+                         // 所以商品信息从索引5开始
+                         Product product;
+                         product.id = std::stoi(argv[5]);
+                         product.name = argv[6];
+                         product.price = std::stof(argv[7]);
+                         product.stock = std::stoi(argv[8]);
+                         
+                         cart_item.product = product;
+                         cart_item.quantity = std::stoi(argv[3]);
+                         cart_item.subtotal = std::stof(argv[4]);
+                         
+                         cart_items_ptr->push_back(cart_item);
+                         return 0;
+                     }, &cart_items, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "查询购物车项失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return cart_items;
+    }
+    
+    return cart_items;
+}
+
+std::vector<Product> get_low_stock_products(const int threshold)
+{
+    std::vector<Product> low_stock_products;
+    const std::string sql = "SELECT * FROM products WHERE stock <= " + std::to_string(threshold) + ";";
+    
+    if (sqlite3_exec(db, sql.c_str(), 
+                     [](void* data, int argc, char** argv, char** col_name) -> int 
+                     {   
+                         auto* products_ptr = static_cast<std::vector<Product>*>(data);
+                         Product product;
+                         product.id = std::stoi(argv[0]);
+                         product.name = argv[1];
+                         product.price = std::stof(argv[2]);
+                         product.stock = std::stoi(argv[3]);
+                         products_ptr->push_back(product);
+                         return 0;
+                     }, &low_stock_products, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "查询低库存商品失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return low_stock_products;
+    }
+    
+    return low_stock_products;
+}

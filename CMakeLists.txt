@@ -23,7 +23,7 @@ find_package(Qt6 COMPONENTS
         Widgets
         REQUIRED)
 
-add_executable(SalesSystem_ main.cpp
+add_executable(SalesSystem_ WIN32 main.cpp
         sqlite/database.cpp
         sale/salesManager.cpp
         sale/stockManager.cpp
@@ -37,6 +37,9 @@ add_executable(SalesSystem_ main.cpp
         qt/manualadddialog.h
         qt/settlementdialog.cpp
         qt/settlementdialog.h
+        qt/historydialog.cpp
+        qt/historydialog.h
+        qt/historydialog.ui
 )
 target_include_directories(SalesSystem_ PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -79,8 +82,3 @@ if (WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
                 "$<TARGET_FILE_DIR:${PROJECT_NAME}>")
     endforeach (QT_LIB)
 endif ()
-
-#if (MINGW)
-#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer -O0")
-#    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
-#endif ()

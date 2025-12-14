@@ -115,3 +115,10 @@ void MainWindow::on_jiesuan_clicked()
     SettlementDialog dialog(this, m_cart.total_price);
     dialog.exec();
 }
+
+void MainWindow::on_historyButton_clicked()
+{
+    // 打开历史记录窗口
+    HistoryDialog dialog(this);
+    dialog.exec();
+}
