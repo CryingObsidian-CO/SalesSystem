@@ -3,6 +3,8 @@
 #include <QPushButton>
 #include <QTableWidgetItem>
 #include <QMessageBox>
+#include "manualadddialog.h"
+#include "settlementdialog.h"
 
 MainWindow::MainWindow(QWidget* parent) :
     QMainWindow(parent),
@@ -86,9 +88,9 @@ void MainWindow::onMngmClicked()
 
 void MainWindow::on_sdtj_clicked()
 {
-    // 手动添加商品到购物车的逻辑
-    // 这里只是一个示例，实际应用中可能需要弹出对话框让用户输入商品信息
-    QMessageBox::information(this, "提示", "手动添加功能尚未实现");
+    // 弹出手动添加商品对话框
+    ManualAddDialog dialog(this);
+    dialog.exec();
 }
 
 void MainWindow::on_qk_clicked()
@@ -109,7 +111,7 @@ void MainWindow::on_jiesuan_clicked()
         return;
     }
 
-    QMessageBox::information(this, "结算",
-                             QString("总计金额：%1 元\n结算功能尚未实现").arg(
-                                 QString::number(m_cart.total_price, 'f', 2)));
+    // 弹出结算对话框
+    SettlementDialog dialog(this, m_cart.total_price);
+    dialog.exec();
 }

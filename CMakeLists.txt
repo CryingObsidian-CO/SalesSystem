@@ -33,6 +33,10 @@ add_executable(SalesSystem_ main.cpp
         qt/simulate.cpp
         qt/simulate.h
         qt/simulate.ui
+        qt/manualadddialog.cpp
+        qt/manualadddialog.h
+        qt/settlementdialog.cpp
+        qt/settlementdialog.h
 )
 target_include_directories(SalesSystem_ PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}

@@ -185,3 +185,70 @@ std::vector<Product> get_all_products()
     
     return products;
 }
+
+bool save_transaction(const Transaction& transaction)
+{
+    // 开启事务
+    if (sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "开启事务失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return false;
+    }
+    
+    // 插入交易记录
+    char insert_transaction_sql[512];
+    snprintf(insert_transaction_sql, sizeof(insert_transaction_sql),
+             "INSERT INTO transactions (create_time, is_paid, total_price, amount_paid, change) VALUES (%ld, %d, %.2f, %.2f, %.2f);",
+             transaction.create_time, transaction.is_paid, transaction.total_price,
+             transaction.amount_paid, transaction.change);
+    
+    if (sqlite3_exec(db, insert_transaction_sql, nullptr, nullptr, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "插入交易记录失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+        return false;
+    }
+    
+    // 获取生成的transaction_id
+    int transaction_id = sqlite3_last_insert_rowid(db);
+    
+    // 插入购物车项
+    for (const auto& item : transaction.cart.items)
+    {
+        char insert_cart_item_sql[512];
+        snprintf(insert_cart_item_sql, sizeof(insert_cart_item_sql),
+                 "INSERT INTO cart_items (transaction_id, product_id, quantity, subtotal) VALUES (%d, %d, %d, %.2f);",
+                 transaction_id, item.product.id, item.quantity, item.subtotal);
+        
+        if (sqlite3_exec(db, insert_cart_item_sql, nullptr, nullptr, &err_msg) != SQLITE_OK)
+        {
+            fprintf(stderr, "插入购物车项失败: %s\n", err_msg);
+            sqlite3_free(err_msg);
+            sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+            return false;
+        }
+        
+        // 更新商品库存
+        int new_stock = item.product.stock - item.quantity;
+        if (!update_stock(item.product.id, new_stock))
+        {
+            fprintf(stderr, "更新商品库存失败，商品ID: %d\n", item.product.id);
+            sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+            return false;
+        }
+    }
+    
+    // 提交事务
+    if (sqlite3_exec(db, "COMMIT TRANSACTION;", nullptr, nullptr, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "提交事务失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+        return false;
+    }
+    
+    printf("交易记录保存成功，交易ID: %d\n", transaction_id);
+    return true;
+}

@@ -5,6 +5,9 @@
 #include "simulate.h"
 #include "saleStruct.h"
 
+class ManualAddDialog;
+class SettlementDialog;
+
 QT_BEGIN_NAMESPACE
 
 namespace Ui
