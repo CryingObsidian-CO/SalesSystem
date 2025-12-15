@@ -219,7 +219,7 @@ void HistoryDialog::showLowStockWarning()
 
 void HistoryDialog::on_returnButton_clicked()
 {
-    // 获取当前选中的交易ID（可选）
+    // 获取当前选中的交易ID
     QModelIndexList selectedRows = ui->transactionTable->selectionModel()->selectedRows();
     int transactionId = 0;
     
@@ -241,6 +241,24 @@ void HistoryDialog::on_returnButton_clicked()
 
     // 刷新交易记录
     loadTransactions();
+    
+    // 如果原来有选中的交易，重新选中并显示详情
+    if (transactionId > 0)
+    {
+        // 查找刷新后的交易行
+        QStandardItemModel* model = static_cast<QStandardItemModel*>(ui->transactionTable->model());
+        for (int row = 0; row < model->rowCount(); ++row)
+        {
+            if (model->item(row, 0)->text().toInt() == transactionId)
+            {
+                // 选中该行
+                ui->transactionTable->selectRow(row);
+                // 显示交易详情
+                showTransactionDetails(transactionId);
+                break;
+            }
+        }
+    }
 }
 
 void HistoryDialog::on_returnRecordButton_clicked()
@@ -361,13 +379,13 @@ void HistoryDialog::on_returnRecordButton_clicked()
             {
                 QDateTime transactionTime = QDateTime::fromSecsSinceEpoch(transactionIt->create_time);
                 
-                QString basicInfo = QString("交易ID: %1\n交易时间: %2\n是否支付: %3\n总金额: %.2f\n支付金额: %.2f\n找零: %.2f")
+                QString basicInfo = QString("交易ID: %1\n交易时间: %2\n是否支付: %3\n总金额: %4\n支付金额: %5\n找零: %6")
                     .arg(transactionIt->transaction_id)
                     .arg(transactionTime.toString("yyyy-MM-dd HH:mm:ss"))
                     .arg(transactionIt->is_paid ? "已支付" : "未支付")
-                    .arg(transactionIt->total_price)
-                    .arg(transactionIt->amount_paid)
-                    .arg(transactionIt->change);
+                    .arg(transactionIt->total_price, 0, 'f', 2)
+                    .arg(transactionIt->amount_paid, 0, 'f', 2)
+                    .arg(transactionIt->change, 0, 'f', 2);
                 
                 auto* infoLabel = new QLabel(basicInfo, basicInfoGroup);
                 basicInfoLayout->addWidget(infoLabel);
