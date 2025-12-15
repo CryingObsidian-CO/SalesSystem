@@ -42,6 +42,8 @@ add_executable(SalesSystem_ WIN32 main.cpp
         qt/historydialog.cpp
         qt/historydialog.h
         qt/historydialog.ui
+        qt/returndialog.cpp
+        qt/returndialog.h
 )
 target_include_directories(SalesSystem_ PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}

@@ -17,12 +17,17 @@ std::vector<CartItem> get_cart_items_by_transaction_id(int transaction_id);
 std::vector<Product> get_low_stock_products();
 bool delete_product(int id);
 bool delete_product(const std::string& name);
-bool update_product(int id, const std::string& name, double price, int stock, int alert_threshold = 10, std::string* errorMsg = nullptr);
-bool update_product(const std::string& old_name, const std::string& new_name, double price, int stock, int alert_threshold = 10, std::string* errorMsg = nullptr);
+bool update_product(int id, const std::string& name, double price, int stock, int alert_threshold, std::string* errorMsg = nullptr);
+bool update_product(const std::string& old_name, const std::string& new_name, double price, int stock, int alert_threshold, std::string* errorMsg = nullptr);
 bool set_product_alert_threshold(int id, int threshold);
 bool set_product_alert_threshold(const std::string& name, int threshold);
 int get_product_alert_threshold(int id);
 int get_product_alert_threshold(const std::string& name);
 
+// 退货相关函数
+bool add_return(int transaction_id, int product_id, int quantity, const std::string& reason = "");
+std::vector<ReturnItem> get_all_returns();
+std::vector<ReturnItem> get_returns_by_transaction_id(int transaction_id);
+std::vector<ReturnItem> get_returns_by_product_id(int product_id);
 
 #endif // DATABASE_H

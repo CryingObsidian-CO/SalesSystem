@@ -94,6 +94,20 @@
       </spacer>
      </item>
      <item>
+      <widget class="QPushButton" name="returnButton">
+       <property name="text">
+        <string>退货</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="returnRecordButton">
+       <property name="text">
+        <string>退货记录</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="refreshButton">
        <property name="text">
         <string>刷新记录</string>

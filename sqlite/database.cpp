@@ -1,5 +1,6 @@
 #include "database.h"
 #include <cstdio>
+#include <ctime>
 #include <sqlite3.h>
 
 
@@ -45,6 +46,7 @@ bool init_db()
         "transaction_id INTEGER NOT NULL,"
         "product_id INTEGER NOT NULL,"
         "quantity INTEGER NOT NULL CHECK(quantity > 0),"
+        "returned_quantity INTEGER NOT NULL DEFAULT 0 CHECK(returned_quantity >= 0),"
         "subtotal REAL NOT NULL,"
         "FOREIGN KEY(transaction_id) REFERENCES transactions(transaction_id),"
         "FOREIGN KEY(product_id) REFERENCES products(id)"
@@ -64,6 +66,37 @@ bool init_db()
         return false;
     }
     rc = sqlite3_exec(db, sql_create_cart_items, nullptr, nullptr, &err_msg);
+    if (rc != SQLITE_OK)
+    {
+        fprintf(stderr, "SQL error: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return false;
+    }
+    
+    // 为现有数据库添加returned_quantity列
+    const char* sql_alter_cart_items = 
+        "ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS returned_quantity INTEGER NOT NULL DEFAULT 0;";
+    rc = sqlite3_exec(db, sql_alter_cart_items, nullptr, nullptr, &err_msg);
+    if (rc != SQLITE_OK)
+    {
+        fprintf(stderr, "修改cart_items表失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        // 继续执行，不中断初始化
+    }
+    
+    // 创建退货表
+    const char* sql_create_returns =
+        "CREATE TABLE IF NOT EXISTS returns ("
+        "return_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "transaction_id INTEGER NOT NULL,"
+        "product_id INTEGER NOT NULL,"
+        "quantity INTEGER NOT NULL CHECK(quantity > 0),"
+        "reason TEXT,"
+        "return_time INTEGER NOT NULL,"
+        "FOREIGN KEY(transaction_id) REFERENCES transactions(transaction_id),"
+        "FOREIGN KEY(product_id) REFERENCES products(id)"
+        ");";
+    rc = sqlite3_exec(db, sql_create_returns, nullptr, nullptr, &err_msg);
     if (rc != SQLITE_OK)
     {
         fprintf(stderr, "SQL error: %s\n", err_msg);
@@ -302,17 +335,18 @@ std::vector<CartItem> get_cart_items_by_transaction_id(const int transaction_id)
                          auto* cart_items_ptr = static_cast<std::vector<CartItem>*>(data);
                          CartItem cart_item;
                          
-                         // cart_items表的列：item_id, transaction_id, product_id, quantity, subtotal (5列)
-                         // 所以商品信息从索引5开始
+                         // cart_items表的列：item_id, transaction_id, product_id, quantity, returned_quantity, subtotal (6列)
+                         // 所以商品信息从索引6开始
                          Product product;
-                         product.id = std::stoi(argv[5]);
-                         product.name = argv[6];
-                         product.price = std::stof(argv[7]);
-                         product.stock = std::stoi(argv[8]);
+                         product.id = std::stoi(argv[6]);
+                         product.name = argv[7];
+                         product.price = std::stof(argv[8]);
+                         product.stock = std::stoi(argv[9]);
                          
                          cart_item.product = product;
                          cart_item.quantity = std::stoi(argv[3]);
-                         cart_item.subtotal = std::stof(argv[4]);
+                         cart_item.returned_quantity = std::stoi(argv[4]);
+                         cart_item.subtotal = std::stof(argv[5]);
                          
                          cart_items_ptr->push_back(cart_item);
                          return 0;
@@ -540,4 +574,244 @@ int get_product_alert_threshold(const std::string& name)
     }
     
     return get_product_alert_threshold(id);
+}
+
+// 退货相关函数实现
+
+bool add_return(int transaction_id, int product_id, int quantity, const std::string& reason)
+{
+    // 开启事务
+    if (sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "开启事务失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return false;
+    }
+    
+    // 1. 查询当前购物车项的已退货数量
+    char select_cart_item_sql[512];
+    snprintf(select_cart_item_sql, sizeof(select_cart_item_sql),
+             "SELECT item_id, returned_quantity FROM cart_items WHERE transaction_id = %d AND product_id = %d;",
+             transaction_id, product_id);
+    
+    int results[2] = {-1, 0}; // [0] = cart_item_id, [1] = current_returned
+    
+    if (sqlite3_exec(db, select_cart_item_sql, 
+                     [](void* data, int argc, char** argv, char** col_name) -> int 
+                     {
+                         int* results = static_cast<int*>(data);
+                         results[0] = std::stoi(argv[0]); // item_id
+                         results[1] = std::stoi(argv[1]); // returned_quantity
+                         return 0;
+                     }, results, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "查询购物车项失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+        return false;
+    }
+    
+    int cart_item_id = results[0];
+    int current_returned = results[1];
+    
+    if (cart_item_id == -1)
+    {
+        fprintf(stderr, "购物车项不存在\n");
+        sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+        return false;
+    }
+    
+    // 2. 添加退货记录
+    char insert_return_sql[512];
+    time_t now = time(nullptr);
+    snprintf(insert_return_sql, sizeof(insert_return_sql),
+             "INSERT INTO returns (transaction_id, product_id, quantity, reason, return_time) VALUES (%d, %d, %d, '%s', %ld);",
+             transaction_id, product_id, quantity, reason.c_str(), now);
+    
+    if (sqlite3_exec(db, insert_return_sql, nullptr, nullptr, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "插入退货记录失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+        return false;
+    }
+    
+    // 3. 更新购物车项的已退货数量
+    int new_returned = current_returned + quantity;
+    char update_cart_item_sql[512];
+    snprintf(update_cart_item_sql, sizeof(update_cart_item_sql),
+             "UPDATE cart_items SET returned_quantity = %d WHERE item_id = %d;",
+             new_returned, cart_item_id);
+    
+    if (sqlite3_exec(db, update_cart_item_sql, nullptr, nullptr, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "更新购物车项退货数量失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+        return false;
+    }
+    
+    // 4. 查询当前商品库存
+    Product product = query_product(product_id);
+    if (product.id == -1)
+    {
+        fprintf(stderr, "查询商品失败: 未找到ID为 %d 的商品\n", product_id);
+        sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+        return false;
+    }
+    
+    // 5. 更新商品库存（增加退货数量）
+    int newStock = product.stock + quantity;
+    if (!update_stock(product_id, newStock))
+    {
+        fprintf(stderr, "更新商品库存失败，商品ID: %d\n", product_id);
+        sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+        return false;
+    }
+    
+    // 6. 更新交易总金额
+    // 计算退货金额
+    float returnAmount = product.price * quantity;
+    
+    // 查询当前交易信息
+    char select_transaction_sql[512];
+    snprintf(select_transaction_sql, sizeof(select_transaction_sql),
+             "SELECT total_price, amount_paid, change FROM transactions WHERE transaction_id = %d;",
+             transaction_id);
+    
+    float currentTotal = 0.0f;
+    float currentPaid = 0.0f;
+    float currentChange = 0.0f;
+    
+    if (sqlite3_exec(db, select_transaction_sql, 
+                     [](void* data, int argc, char** argv, char** col_name) -> int 
+                     {
+                         float* results = static_cast<float*>(data);
+                         results[0] = std::stof(argv[0]); // total_price
+                         results[1] = std::stof(argv[1]); // amount_paid
+                         results[2] = std::stof(argv[2]); // change
+                         return 0;
+                     }, &currentTotal, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "查询交易信息失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+        return false;
+    }
+    
+    // 计算新的总金额、支付金额和找零
+    float newTotal = currentTotal - returnAmount;
+    // 支付金额和找零保持不变，因为这是实际的支付情况
+    // 只有总金额需要调整为扣除退货后的金额
+    
+    // 更新交易记录
+    char update_transaction_sql[512];
+    snprintf(update_transaction_sql, sizeof(update_transaction_sql),
+             "UPDATE transactions SET total_price = %.2f WHERE transaction_id = %d;",
+             newTotal, transaction_id);
+    
+    if (sqlite3_exec(db, update_transaction_sql, nullptr, nullptr, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "更新交易总金额失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+        return false;
+    }
+    
+    // 提交事务
+    if (sqlite3_exec(db, "COMMIT TRANSACTION;", nullptr, nullptr, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "提交事务失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_exec(db, "ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+        return false;
+    }
+    
+    printf("退货记录添加成功，交易ID: %d, 商品ID: %d, 数量: %d, 退货金额: %.2f\n", 
+           transaction_id, product_id, quantity, returnAmount);
+    return true;
+}
+
+std::vector<ReturnItem> get_all_returns()
+{
+    std::vector<ReturnItem> returnItems;
+    const char* sql = "SELECT * FROM returns ORDER BY return_time DESC;";
+    
+    if (sqlite3_exec(db, sql, 
+                     [](void* data, int argc, char** argv, char** col_name) -> int 
+                     {
+                         auto* returns_ptr = static_cast<std::vector<ReturnItem>*>(data);
+                         ReturnItem return_item;
+                         return_item.return_id = std::stoi(argv[0]);
+                         return_item.transaction_id = std::stoi(argv[1]);
+                         return_item.product_id = std::stoi(argv[2]);
+                         return_item.quantity = std::stoi(argv[3]);
+                         return_item.reason = argv[4] ? argv[4] : "";
+                         return_item.return_time = std::stol(argv[5]);
+                         returns_ptr->push_back(return_item);
+                         return 0;
+                     }, &returnItems, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "查询所有退货记录失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return returnItems;
+    }
+    
+    return returnItems;
+}
+
+std::vector<ReturnItem> get_returns_by_transaction_id(int transaction_id)
+{
+    std::vector<ReturnItem> returns;
+    const std::string sql = "SELECT * FROM returns WHERE transaction_id = " + std::to_string(transaction_id) + " ORDER BY return_time DESC;";
+    
+    if (sqlite3_exec(db, sql.c_str(), 
+                     [](void* data, int argc, char** argv, char** col_name) -> int 
+                     {   
+                         auto* returns_ptr = static_cast<std::vector<ReturnItem>*>(data);
+                         ReturnItem return_item;
+                         return_item.return_id = std::stoi(argv[0]);
+                         return_item.transaction_id = std::stoi(argv[1]);
+                         return_item.product_id = std::stoi(argv[2]);
+                         return_item.quantity = std::stoi(argv[3]);
+                         return_item.reason = argv[4] ? argv[4] : "";
+                         return_item.return_time = std::stol(argv[5]);
+                         returns_ptr->push_back(return_item);
+                         return 0;
+                     }, &returns, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "查询交易退货记录失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return returns;
+    }
+    
+    return returns;
+}
+
+std::vector<ReturnItem> get_returns_by_product_id(int product_id)
+{
+    std::vector<ReturnItem> returns;
+    const std::string sql = "SELECT * FROM returns WHERE product_id = " + std::to_string(product_id) + " ORDER BY return_time DESC;";
+    
+    if (sqlite3_exec(db, sql.c_str(), 
+                     [](void* data, int argc, char** argv, char** col_name) -> int 
+                     {   
+                         auto* returns_ptr = static_cast<std::vector<ReturnItem>*>(data);
+                         ReturnItem return_item;
+                         return_item.return_id = std::stoi(argv[0]);
+                         return_item.transaction_id = std::stoi(argv[1]);
+                         return_item.product_id = std::stoi(argv[2]);
+                         return_item.quantity = std::stoi(argv[3]);
+                         return_item.reason = argv[4] ? argv[4] : "";
+                         return_item.return_time = std::stol(argv[5]);
+                         returns_ptr->push_back(return_item);
+                         return 0;
+                     }, &returns, &err_msg) != SQLITE_OK)
+    {
+        fprintf(stderr, "查询商品退货记录失败: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        return returns;
+    }
+    
+    return returns;
 }

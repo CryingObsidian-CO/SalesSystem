@@ -18,6 +18,7 @@ typedef struct {
 typedef struct {
     Product product;    // 商品信息
     int quantity;       // 购买数量
+    int returned_quantity; // 已退货数量
     float subtotal;     // 小计金额 = price * quantity
 } CartItem;
 
@@ -37,6 +38,16 @@ typedef struct {
     float amount_paid;      // 实际支付金额
     float change;           // 找零金额
 } Transaction;
+
+/* ========== 5. 定义退货结构体 ========== */
+typedef struct {
+    int return_id;          // 退货编号
+    int transaction_id;     // 关联的交易编号
+    int product_id;         // 退货商品ID
+    int quantity;           // 退货数量
+    std::string reason;     // 退货原因
+    time_t return_time;     // 退货时间
+} ReturnItem;
 
 
 #endif // SALE_STRUCT_H

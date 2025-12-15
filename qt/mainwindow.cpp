@@ -38,8 +38,12 @@ void MainWindow::updateCartDisplay()
 {
     ui->productTable->setRowCount(0);
     // 遍历购物车中的商品
-    for (const auto& [product, quantity, subtotal] : m_cart.items)
+    for (const auto& item : m_cart.items)
     {
+        const auto& product = item.product;
+        const auto quantity = item.quantity;
+        const auto subtotal = item.subtotal;
+
         // 添加新行
         const int row = ui->productTable->rowCount();
         ui->productTable->insertRow(row);

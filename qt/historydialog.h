@@ -21,6 +21,8 @@ public:
 private slots:
     void on_transactionTable_doubleClicked(const QModelIndex &index);
     void on_refreshButton_clicked();
+    void on_returnButton_clicked();
+    void on_returnRecordButton_clicked();
     void checkLowStock();
 
 private:
