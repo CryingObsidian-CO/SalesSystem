@@ -225,7 +225,7 @@ void RestockDialog::onRefreshClicked()
     QMessageBox::information(this, "提示", "商品列表已刷新");
 }
 
-void RestockDialog::onProductTableDoubleClicked(const QModelIndex& index)
+void RestockDialog::onProductTableDoubleClicked(const QModelIndex& index) const
 {
     // 获取双击的行号
     int row = index.row();

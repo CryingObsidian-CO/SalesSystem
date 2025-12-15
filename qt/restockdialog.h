@@ -39,7 +39,7 @@ private slots:
     void onRestockClicked();
     void onCancelClicked();
     void onRefreshClicked();
-    void onProductTableDoubleClicked(const QModelIndex& index);
+    void onProductTableDoubleClicked(const QModelIndex& index) const;
 };
 
 #endif // RESTOCKDIALOG_H

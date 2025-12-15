@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>simulate</string>
+   <string>模拟购买</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
